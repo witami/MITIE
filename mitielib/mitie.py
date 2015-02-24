@@ -6,12 +6,11 @@ def _last_modified_time(filename):
     else:
         return 0
 
-
 # Load the mitie shared library.  We will look in a few places to see if we can find it.
 # What we do depends on our platform
 parent = os.path.dirname(os.path.realpath(__file__))
-if os.name == 'nt': 
-    #if on windows just look in the same folder as the mitie.py file and also in any 
+if os.name == 'nt':
+    #if on windows just look in the same folder as the mitie.py file and also in any
     #subfolders that might have the appropriate 32 or 64 bit dlls, whichever is right for
     #the version of python we are using.
     arch = platform.architecture()
@@ -34,9 +33,9 @@ else:
     times = [(_last_modified_time(f),f) for f in files]
     most_recent = max(times, key=lambda x:x[0])[1]
     _f = ctypes.CDLL(most_recent)
-    
 
-    
+
+
 
 _f.mitie_free.restype = None
 _f.mitie_free.argtypes = ctypes.c_void_p,
@@ -65,9 +64,6 @@ _f.mitie_ner_get_detection_length.argtypes = ctypes.c_void_p, ctypes.c_ulong
 _f.mitie_ner_get_detection_tag.restype = ctypes.c_ulong
 _f.mitie_ner_get_detection_tag.argtypes = ctypes.c_void_p, ctypes.c_ulong
 
-_f.mitie_ner_get_detection_score.restype = ctypes.c_double
-_f.mitie_ner_get_detection_score.argtypes = ctypes.c_void_p, ctypes.c_ulong
-
 _f.mitie_ner_get_num_detections.restype = ctypes.c_ulong
 _f.mitie_ner_get_num_detections.argtypes = ctypes.c_void_p,
 
@@ -88,32 +84,32 @@ def _get_windowed_range(tokens, arg1, arg2):
     begin = min(min(arg1), min(arg2))
     end   = max(max(arg1), max(arg2))+1
     if (begin > winsize):
-        begin -= winsize 
+        begin -= winsize
     else:
         begin = 0
     end = min(end+winsize, len(tokens))
-    r = xrange(begin, end)
+    r = range(begin, end)
     return r
 
 
 def python_to_mitie_str_array(tokens, r = None):
-    """Convert from a Python list of strings into MITIE's NULL terminated char** array type.  
-    Note that the memory returned by this object is managed by Python and doesn't need to be 
+    """Convert from a Python list of strings into MITIE's NULL terminated char** array type.
+    Note that the memory returned by this object is managed by Python and doesn't need to be
     freed by the user.
 
     r should be a range that indicates which part of tokens to convert.  If r is not given
     then it defaults to xrange(len(tokens)) which selects the entirety of tokens to convert.
     """
     if (r == None):
-        r = xrange(len(tokens))
+        r = range(len(tokens))
 
     ctokens = (ctypes.c_char_p*(len(r)+1))()
     i = 0
     for j in r:
         if (isinstance(tokens[j], tuple)):
-            ctokens[i] = tokens[j][0]
+            ctokens[i] = tokens[j][0].encode('utf-8')
         else:
-            ctokens[i] = tokens[j]
+            ctokens[i] = tokens[j].encode('utf-8')
         i = i + 1
     ctokens[i] = None
     return ctokens
@@ -123,10 +119,10 @@ def _range_is_valid (list, range):
     return (0 <= min(range) and max(range) < len(list))
 
 def load_entire_file(filename):
-    x = _f.mitie_load_entire_file(filename)
+    x = _f.mitie_load_entire_file(filename.encode('utf-8'))
     if (x == None):
         raise Exception("Unable to load file " + filename)
-    res = ctypes.string_at(x) 
+    res = ctypes.string_at(x).decode('utf-8')
     _f.mitie_free(x)
     return res
 
@@ -135,13 +131,13 @@ def tokenize(str):
     mitie_tokenize = _f.mitie_tokenize
     mitie_tokenize.restype = ctypes.POINTER(ctypes.c_char_p)
     mitie_tokenize.argtypes = ctypes.c_char_p,
-    tok = mitie_tokenize(str)
+    tok = mitie_tokenize(str.encode('utf-8'))
     if (tok == None):
         raise Exception("Unable to tokenize string.")
     i = 0
     res = []
     while(tok[i] != None):
-        res.append(tok[i])
+        res.append(tok[i].decode('utf-8'))
         i = i + 1
     _f.mitie_free(tok)
     return res
@@ -154,13 +150,13 @@ def tokenize_with_offsets(str):
     mitie_tokenize.restype = ctypes.POINTER(ctypes.c_char_p)
     mitie_tokenize.argtypes = ctypes.c_char_p, ctypes.POINTER(ctypes.POINTER(ctypes.c_ulong))
     token_offsets = ctypes.POINTER(ctypes.c_ulong)()
-    tok = mitie_tokenize(str, ctypes.byref(token_offsets))
+    tok = mitie_tokenize(str.encode('utf-8'), ctypes.byref(token_offsets))
     if (tok == None):
         raise Exception("Unable to tokenize string.")
     i = 0
     res = []
     while(tok[i] != None):
-        res.append((tok[i], token_offsets[i]))
+        res.append((tok[i].decode('utf-8'), token_offsets[i]))
         i = i + 1
     _f.mitie_free(tok)
     _f.mitie_free(token_offsets)
@@ -176,7 +172,7 @@ class named_entity_extractor:
             # filename is a pointer to a ner object.
             self.__obj = filename
         else:
-            self.__obj = _f.mitie_load_named_entity_extractor(filename)
+            self.__obj = _f.mitie_load_named_entity_extractor(filename.encode('utf-8'))
         if (self.__obj == None):
             raise Exception("Unable to load named entity extractor from " + filename)
 
@@ -189,13 +185,13 @@ class named_entity_extractor:
 
     def get_possible_ner_tags(self):
         num = _f.mitie_get_num_possible_ner_tags(self.__obj)
-        return [_f.mitie_get_named_entity_tagstr(self.__obj, i) for i in xrange(num)]
+        return [_f.mitie_get_named_entity_tagstr(self.__obj, i).decode('utf-8') for i in range(num)]
 
     def save_to_disk(self, filename):
         """Save this object to disk.  You recall it from disk with the following Python
-        code: 
+        code:
             ner = named_entity_extractor(filename)"""
-        if (_f.mitie_save_named_entity_extractor(filename, self.__obj) != 0):
+        if (_f.mitie_save_named_entity_extractor(filename.encode('utf-8'), self.__obj) != 0):
             raise Exception("Unable to save named_entity_extractor to the file " + filename);
 
     def extract_entities(self, tokens):
@@ -205,11 +201,10 @@ class named_entity_extractor:
         if (dets == None):
             raise Exception("Unable to create entity detections.")
         num = _f.mitie_ner_get_num_detections(dets)
-        temp = ([(xrange(_f.mitie_ner_get_detection_position(dets,i),
+        temp = ([(range(_f.mitie_ner_get_detection_position(dets,i),
             _f.mitie_ner_get_detection_position(dets,i)+_f.mitie_ner_get_detection_length(dets,i)),
-            tags[_f.mitie_ner_get_detection_tag(dets,i)],
-            _f.mitie_ner_get_detection_score(dets,i)
-            ) for i in xrange(num)])
+                  tags[_f.mitie_ner_get_detection_tag(dets,i)]
+            ) for i in range(num)])
         _f.mitie_free(dets)
         return temp
 
@@ -246,10 +241,10 @@ class named_entity_extractor:
 ####################################################################################################
 
 _f.mitie_load_binary_relation_detector.restype = ctypes.c_void_p
-_f.mitie_load_binary_relation_detector.argtypes = ctypes.c_char_p, 
+_f.mitie_load_binary_relation_detector.argtypes = ctypes.c_char_p,
 
 _f.mitie_binary_relation_detector_name_string.restype = ctypes.c_char_p
-_f.mitie_binary_relation_detector_name_string.argtypes = ctypes.c_void_p, 
+_f.mitie_binary_relation_detector_name_string.argtypes = ctypes.c_void_p,
 
 _f.mitie_classify_binary_relation.restype = ctypes.c_int
 _f.mitie_classify_binary_relation.argtypes = ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(ctypes.c_double)
@@ -260,7 +255,7 @@ _f.mitie_save_binary_relation_detector.argtypes = ctypes.c_char_p, ctypes.c_void
 
 class binary_relation:
     def __init__(self, obj):
-        self.__obj =  obj 
+        self.__obj =  obj
         self.__mitie_free = _f.mitie_free
 
     @property
@@ -280,7 +275,7 @@ class binary_relation_detector:
             # filename is a pointer to a ner object.
             self.__obj = filename
         else:
-            self.__obj = _f.mitie_load_binary_relation_detector(filename)
+            self.__obj = _f.mitie_load_binary_relation_detector(filename.encode('utf-8'))
         if (self.__obj == None):
             raise Exception("Unable to load binary relation detector from " + filename)
 
@@ -289,23 +284,23 @@ class binary_relation_detector:
 
     def save_to_disk(self, filename):
         """Save this object to disk.  You recall it from disk with the following Python
-        code: 
+        code:
             ner = binary_relation_detector(filename)"""
-        if (_f.mitie_save_binary_relation_detector(filename, self.__obj) != 0):
+        if (_f.mitie_save_binary_relation_detector(filename.encode('utf-8'), self.__obj) != 0):
             raise Exception("Unable to save binary_relation_detector to the file " + filename);
 
     def __str__(self):
-        return "binary_relation_detector: " + _f.mitie_binary_relation_detector_name_string(self.__obj)
+        return "binary_relation_detector: " + _f.mitie_binary_relation_detector_name_string(self.__obj).decode('utf-8')
 
     def __repr__(self):
-        return "<binary_relation_detector: " + _f.mitie_binary_relation_detector_name_string(self.__obj) + ">"
+        return "<binary_relation_detector: " + _f.mitie_binary_relation_detector_name_string(self.__obj).decode('utf-8') + ">"
 
     @property
     def name_string(self):
-        return _f.mitie_binary_relation_detector_name_string(self.__obj)
-    
+        return _f.mitie_binary_relation_detector_name_string(self.__obj).decode('utf-8')
+
     def __call__(self, relation):
-        """Classify a relation object.  The input should have been produced by 
+        """Classify a relation object.  The input should have been produced by
         named_entity_extractor.extract_binary_relation().  This function returns a classification score
         and if this number is > 0 then the relation detector is indicating that the input relation
         is a true instance of the type of relation this object detects."""
@@ -322,7 +317,7 @@ _f.mitie_add_ner_training_entity.restype = ctypes.c_int
 _f.mitie_add_ner_training_entity.argtypes = ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_char_p
 
 _f.mitie_add_ner_training_instance.restype = ctypes.c_int
-_f.mitie_add_ner_training_instance.argtypes = ctypes.c_void_p, ctypes.c_void_p 
+_f.mitie_add_ner_training_instance.argtypes = ctypes.c_void_p, ctypes.c_void_p
 
 _f.mitie_create_ner_trainer.restype = ctypes.c_void_p
 _f.mitie_create_ner_trainer.argtypes = ctypes.c_char_p,
@@ -390,20 +385,20 @@ class ner_training_instance:
             raise Exception("Invalid range given to ner_training_instance.overlaps_any_entity()")
         if (self.overlaps_any_entity(range)):
             raise Exception("Invalid range given to ner_training_instance.overlaps_any_entity().  It overlaps an entity given to a previous call to add_entity().")
-        if (_f.mitie_add_ner_training_entity(self.__obj, min(range), len(range), label) != 0):
+        if (_f.mitie_add_ner_training_entity(self.__obj, min(range), len(range), label.encode('utf-8')) != 0):
             raise Exception("Unable to add entity to training instance.  Probably ran out of RAM.");
-        
+
 
 class ner_trainer(object):
     def __init__(self, filename):
-        self.__obj = _f.mitie_create_ner_trainer(filename)
+        self.__obj = _f.mitie_create_ner_trainer(filename.encode('utf-8'))
         self.__mitie_free = _f.mitie_free
         if (self.__obj == None):
             raise Exception("Unable to create ner_trainer based on " + filename)
 
     def __del__(self):
         self.__mitie_free(self.__obj)
-    
+
     @property
     def size(self):
         return _f.mitie_ner_trainer_size(self.__obj)
@@ -421,7 +416,7 @@ class ner_trainer(object):
         if (value < 0):
             raise Exception("Invalid beta value given.  beta can't be negative.")
         _f.mitie_ner_trainer_set_beta(self.__obj, value)
-    
+
     @property
     def num_threads(self):
         return _f.mitie_ner_trainer_get_num_threads(self.__obj)
@@ -429,7 +424,7 @@ class ner_trainer(object):
     @num_threads.setter
     def num_threads(self, value):
         _f.mitie_ner_trainer_set_num_threads(self.__obj, value)
-    
+
     def train(self):
         if (self.size == 0):
             raise Exception("You can't call train() on an empty trainer.")
@@ -533,7 +528,7 @@ class binary_relation_detector_trainer(object):
         if (value < 0):
             raise Exception("Invalid beta value given.  beta can't be negative.")
         _f.mitie_binary_relation_trainer_set_beta(self.__obj, value)
-    
+
     @property
     def num_threads(self):
         return _f.mitie_binary_relation_trainer_get_num_threads(self.__obj)
@@ -541,7 +536,7 @@ class binary_relation_detector_trainer(object):
     @num_threads.setter
     def num_threads(self, value):
         _f.mitie_binary_relation_trainer_set_num_threads(self.__obj, value)
-    
+
     def train(self):
         if (self.num_positive_examples == 0 or self.num_negative_examples == 0):
             raise Exception("You must give both positive and negative training examples before you call train().")
@@ -550,5 +545,3 @@ class binary_relation_detector_trainer(object):
         if (obj == None):
             raise Exception("Unable to create binary_relation_detector.  Probably ran out of RAM")
         return binary_relation_detector(obj)
-
-
