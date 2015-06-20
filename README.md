@@ -65,7 +65,7 @@ by running:
 cd mitielib
 make
 ```
-This produces shared and static library files in the mitielib folder.  On a non-UNIX system you can use
+This produces shared and static library files in the mitielib folder.  Or you can use
 CMake to compile a shared library by typing:
 ```
 cd mitielib
@@ -75,7 +75,24 @@ cmake ..
 cmake --build . --config Release --target install
 ```
 
-Either of these methods will create a MITIE shared library in the mitielib folder.
+Either of these methods will create a MITIE shared library in the mitielib folder. 
+
+### Compiling MITIE using OpenBLAS
+
+If you compile MITIE using cmake then it will automatically find and use any optimized BLAS
+libraries on your machine.  However, if you compile using regular make then you have
+to manually locate your BLAS libaries or DLIB will default to its built in, but slower, BLAS
+implementation.   Therefore, to use OpenBLAS when compiling without cmake, locate `libopenblas.a` and `libgfortran.a`, then
+run `make` as follows:
+```
+cd mitielib 
+make BLAS_PATH=/path/to/openblas.a LIBGFORTRAN_PATH=/path/to/libfortran.a
+```
+Note that if your BLAS libraries are not in standard locations cmake will fail to find them.  However,
+you can tell it what folder to look in by replacing `cmake ..` with a statement such as:
+```
+cmake -DCMAKE_LIBRARY_PATH=/home/me/place/i/put/blas/lib ..
+```
 
 ### Using MITIE from a Python 2.7 program
 
